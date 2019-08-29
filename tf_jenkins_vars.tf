@@ -24,7 +24,7 @@ variable "ec2_key_name" {
 
 variable "ports" {
     type = "list"
-    default = ["22", "8080", 0]
+    default = ["22", "9090", 0]
 }
 
 
