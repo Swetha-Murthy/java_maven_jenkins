@@ -3,60 +3,11 @@ provider "aws" {
     region = "${var.region}"
     shared_credentials_file = "/usr_share/.aws/credentials"
 }
-# New VPC to host the subnets for AppServer
-resource "aws_vpc" "AppServer_vpc" {
-    cidr_block = "${var.vpc_cidr}"
-    instance_tenancy = "default"
-    enable_dns_hostnames = "true"
-    tags = {
-        Name = "AppServer_vpc"
-    }
-}
 
-# Internet Gateway to enable Public Access
-resource "aws_internet_gateway" "default" {
-    vpc_id = "${aws_vpc.AppServer_vpc.id}"
-    tags = {
-        Name = "IG_for_VPC"
-    }
-  
-}
-
-# Creating Subnet for AppServer EC2 instances
-resource "aws_subnet" "AppServer_subnet" {
-    vpc_id = "${aws_vpc.AppServer_vpc.id}"
-    cidr_block = "${var.subnet_cidr}"
-    tags = {
-        Name = "AppServer_subnet"
-    }
-}
-
-# Route Table for AppServer VPC
-
-resource "aws_route_table" "AppServer_Subnet_RT" {
-    vpc_id = "${aws_vpc.AppServer_vpc.id}"
-    route {
-        cidr_block = "${var.cidr_block_all_traffic}"
-        gateway_id = "${aws_internet_gateway.default.id}"
-    } 
-    tags = {
-        Name = "AppServer_Subnet_RT"
-    }
-}
-
-# Route Table Association
-
-resource "aws_route_table_association" "AppServer_Subnet_RT_Assoc" {
-    subnet_id = "${aws_subnet.AppServer_subnet.id}"
-    route_table_id = "${aws_route_table.AppServer_Subnet_RT.id}"
-}
-
-# Security Group for Tomcat Server
-
-resource "aws_security_group" "AppServer-SG" {
-    name = "AppServer-SG"
-    description = "Security Group for Tomcat App Server"
-    vpc_id = "${aws_vpc.AppServer_vpc.id}"
+resource "aws_security_group" "tomcat-security-group" {
+    name = "tomcat-security-group"
+    description = "Security Group for Tomcat Server"
+    vpc_id = "${var.vpc_id}"
 
     ingress {
         from_port = "${element(var.ports, 1)}"
@@ -72,6 +23,13 @@ resource "aws_security_group" "AppServer-SG" {
         cidr_blocks = ["${var.cidr_block_all_traffic}"]
     }
 
+    ingress {
+        from_port = 8
+        to_port = 0
+        protocol = "icmp"
+        cidr_blocks = ["${var.cidr_block_all_traffic}"]
+    }
+
     egress {
         from_port = "${element(var.ports, 2)}"
         to_port = "${element(var.ports, 2)}"
@@ -79,24 +37,29 @@ resource "aws_security_group" "AppServer-SG" {
         cidr_blocks = ["${var.cidr_block_all_traffic}"]
     }
     tags = {
-        Name = "AppServer-SG"
-        description = "Security Group for Tomcat AppServer"
+        Name = "Tomcat-SG"
+        description = "Security Group for Tomcat Server"
     }
 }
 
-# Creating EC2 Instance to run Tomcat Server
+# Creating EC2 Instance for Tomcat Server
 
-resource "aws_instance" "Tomcat_AppServer" {
-    ami = "ami-07d0cf3af28718ef8"   
+resource "aws_key_pair" "tomcat_ec2_key" {
+    key_name   = "${var.key_pair_name}"
+    public_key = "${file("./tomcat_ec2_key.pub")}"
+}
+
+
+resource "aws_instance" "TomcatServer" {
+    ami = "${lookup(var.ami, var.region)}"
     instance_type = "${var.instance_type}"
-    subnet_id = "${aws_subnet.AppServer_subnet.id}"
-    vpc_security_group_ids = ["${aws_security_group.AppServer-SG.id}"]
+    subnet_id = "${var.subnet_id}"
+    vpc_security_group_ids = ["${aws_security_group.tomcat-security-group.id}"]
+    count = "${length(var.tags)}"
     associate_public_ip_address = "true"
-    key_name = "${var.ec2_key_name}"
+    key_name = "${var.key_pair_name}"
     tags = {
-        Name = "Tomcat_AppServer"
+        Name = "Tomcat${element(var.tags, count.index)}"
         Env = "DEV"
     }
 }
-
-
