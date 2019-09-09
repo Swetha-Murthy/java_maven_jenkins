@@ -5,7 +5,7 @@ pipeline {
 
        stage('SCM Checkout') {
             steps {
-                 url: 'https://github.com/Swetha-Murthy/java_maven_jenkins.git'
+                 git url: 'https://github.com/Swetha-Murthy/java_maven_jenkins.git'
             }
         }
 
